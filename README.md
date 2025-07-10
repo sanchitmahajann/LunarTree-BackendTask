@@ -1,12 +1,13 @@
-# PDF Processing API - Async Queue
+# PDF Processing API - Async Queue + Streamlit UI
 
-A FastAPI-based service that processes PDF documents asynchronously using a background task queue to extract GitHub organization information.
+A FastAPI-based service with Streamlit UI that processes PDF documents asynchronously using a background task queue to extract GitHub organization information.
 
 ## Features
 
 - **Async PDF Processing**: Non-blocking upload with background queue processing
 - **Task Queue System**: Built-in asyncio queue for handling multiple requests
 - **Real-time Status Tracking**: Monitor job progress through different states
+- **Streamlit Web UI**: User-friendly interface for uploads and monitoring
 - **Simulated Long Processing**: 30-300 second delays to simulate real-world processing
 - **GitHub API Integration**: Fetch organization member data
 - **SQLite Persistence**: Job status and results storage
@@ -18,6 +19,7 @@ A FastAPI-based service that processes PDF documents asynchronously using a back
 2. **Background Processing**: Tasks are queued and processed asynchronously
 3. **Status Tracking**: Jobs progress through states: `queued` → `processing` → `completed`/`failed`
 4. **Non-blocking**: Multiple uploads can be handled simultaneously
+5. **Web Interface**: Easy-to-use Streamlit UI for interaction
 
 ## Setup
 
@@ -32,7 +34,25 @@ A FastAPI-based service that processes PDF documents asynchronously using a back
    pip install -r requirements.txt
    ```
 
-## Running the API
+## Running the Application
+
+### Option 1: Using the Streamlit UI (Recommended)
+
+1. **Start the FastAPI backend:**
+   ```bash
+   uvicorn main:app --reload
+   ```
+
+2. **Start the Streamlit UI (in a new terminal):**
+   ```bash
+   streamlit run ui.py
+   ```
+
+3. **Access the application:**
+   - **Streamlit UI**: http://localhost:8501
+   - **API Documentation**: http://localhost:8000/docs
+
+### Option 2: API Only
 
 Development:
 ```bash
@@ -43,6 +63,40 @@ Production:
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
+
+## Streamlit UI Features
+
+### 🏠 Main Interface
+- **Clean, intuitive design** with tabbed navigation
+- **Real-time system status** in sidebar
+- **Queue monitoring** with live statistics
+
+### 📤 Upload Tab
+- **Drag-and-drop PDF upload** with file validation
+- **Instant upload feedback** with job ID generation
+- **File information display** (name, size)
+- **One-click processing** with progress indicators
+
+### 📋 Job History Tab
+- **Job tracking** with persistent session storage
+- **Real-time status updates** with color-coded indicators
+- **Auto-refresh option** (10-second intervals)
+- **Manual job lookup** by job ID
+- **Expandable member lists** for completed jobs
+- **Clear history** functionality
+
+### 🔧 System Monitoring
+- **Queue size** real-time display
+- **Worker status** indicator
+- **Job statistics** breakdown by status
+- **Connection health** checking
+
+### 🎨 Visual Features
+- **Status icons**: 🔵 Queued, 🟡 Processing, 🟢 Completed, 🔴 Failed
+- **Progress indicators** and loading spinners
+- **Responsive layout** with proper spacing
+- **Data tables** for member lists
+- **Error handling** with user-friendly messages
 
 ## API Endpoints
 
@@ -125,6 +179,7 @@ Get current queue statistics and system status.
 ├── main.py              # FastAPI application with async endpoints
 ├── task_queue.py        # Async task queue system and worker
 ├── pdf_processor.py     # PDF processing logic
+├── ui.py                # Streamlit web interface
 ├── requirements.txt     # Dependencies
 ├── README.md           # This file
 ├── test_document.txt   # Sample test file
@@ -147,6 +202,12 @@ Get current queue statistics and system status.
 5. **Completion**: Results saved, status updated to "completed"/"failed"
 6. **Cleanup**: Temporary files removed
 
+### Streamlit Integration
+- **Session State**: Job tracking across page refreshes
+- **Real-time Updates**: Auto-refresh capabilities
+- **API Communication**: RESTful integration with FastAPI backend
+- **Error Handling**: Graceful degradation when API is unavailable
+
 ### Simulated Processing Time
 - **Random Delay**: Each job takes 30-300 seconds to complete
 - **Real Processing**: Actual PDF text extraction and GitHub API calls
@@ -154,6 +215,14 @@ Get current queue statistics and system status.
 
 ## Testing
 
+### Using Streamlit UI
+1. **Start both services** (FastAPI + Streamlit)
+2. **Open browser** to http://localhost:8501
+3. **Upload PDFs** via the web interface
+4. **Monitor progress** in real-time
+5. **View results** with expandable member lists
+
+### Using API Directly
 1. **Upload Multiple PDFs**: Test concurrent processing
    ```bash
    curl -X POST "http://localhost:8000/api/documents/upload" \
@@ -177,10 +246,20 @@ Get current queue statistics and system status.
 - **Concurrent Processing**: Single background worker processes tasks sequentially
 - **Memory Efficient**: Files processed one at a time
 - **Scalable Design**: Easy to extend with multiple workers or distributed queues
+- **Responsive UI**: Streamlit provides smooth user experience
 
 ## Error Handling
 
 - **Upload Failures**: Immediate HTTP error responses
 - **Processing Failures**: Jobs marked as "failed" with cleanup
 - **Worker Recovery**: Continues processing despite individual task failures
-- **Resource Management**: Automatic file cleanup in all scenarios 
+- **Resource Management**: Automatic file cleanup in all scenarios
+- **UI Error Handling**: User-friendly error messages and API connectivity checks
+
+## Deployment Notes
+
+For production deployment:
+1. **API**: Deploy FastAPI using Render, Vercel, or similar
+2. **UI**: Deploy Streamlit using Streamlit Cloud or containerize both services
+3. **Environment**: Update `API_BASE_URL` in `ui.py` to point to production API
+4. **Security**: Add authentication and input validation as needed 
