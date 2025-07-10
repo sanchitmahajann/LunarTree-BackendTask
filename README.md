@@ -1,14 +1,23 @@
-# PDF Processing API - Simplified
+# PDF Processing API - Async Queue
 
-A simple FastAPI-based service that processes PDF documents and extracts GitHub organization information.
+A FastAPI-based service that processes PDF documents asynchronously using a background task queue to extract GitHub organization information.
 
 ## Features
 
-- PDF document upload and processing
-- Regex-based GitHub organization extraction
-- GitHub API integration for member data
-- SQLite persistence
-- Simple, clean architecture
+- **Async PDF Processing**: Non-blocking upload with background queue processing
+- **Task Queue System**: Built-in asyncio queue for handling multiple requests
+- **Real-time Status Tracking**: Monitor job progress through different states
+- **Simulated Long Processing**: 30-300 second delays to simulate real-world processing
+- **GitHub API Integration**: Fetch organization member data
+- **SQLite Persistence**: Job status and results storage
+- **Clean Architecture**: Simple, maintainable codebase
+
+## How It Works
+
+1. **Immediate Response**: Upload endpoint returns immediately with job ID
+2. **Background Processing**: Tasks are queued and processed asynchronously
+3. **Status Tracking**: Jobs progress through states: `queued` → `processing` → `completed`/`failed`
+4. **Non-blocking**: Multiple uploads can be handled simultaneously
 
 ## Setup
 
@@ -38,40 +47,83 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ## API Endpoints
 
 ### POST /api/documents/upload
-Upload a PDF document for processing.
+Upload a PDF document for async processing.
 
 **Request:**
 - Method: POST
 - Content-Type: multipart/form-data
 - Body: PDF file
 
-**Response:**
+**Response (Immediate):**
 ```json
 {
-    "job_id": "unique-job-id",
-    "status": "completed"
+    "job_id": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "message": "PDF uploaded successfully. Processing will begin shortly.",
+    "estimated_processing_time": "30-300 seconds"
 }
 ```
 
 ### GET /api/jobs/{job_id}
-Get the results of a processing job.
+Get job status and results.
+
+**Possible Statuses:**
+- `queued`: Job is waiting in queue
+- `processing`: Job is currently being processed
+- `completed`: Job finished successfully
+- `failed`: Job encountered an error
+
+**Response Examples:**
+
+*Queued:*
+```json
+{
+    "job_id": "550e8400-e29b-41d4-a716-446655440000",
+    "original_filename": "document.pdf",
+    "extracted_company_username": null,
+    "github_members": null,
+    "status": "queued",
+    "timestamp": "2024-02-28T12:00:00",
+    "message": "Job is waiting in queue to be processed"
+}
+```
+
+*Completed:*
+```json
+{
+    "job_id": "550e8400-e29b-41d4-a716-446655440000",
+    "original_filename": "document.pdf",
+    "extracted_company_username": "openai",
+    "github_members": ["member1", "member2", "member3"],
+    "status": "completed",
+    "timestamp": "2024-02-28T12:00:00",
+    "message": "Job completed successfully"
+}
+```
+
+### GET /api/queue/status
+Get current queue statistics and system status.
 
 **Response:**
 ```json
 {
-    "job_id": "unique-job-id",
-    "original_filename": "document.pdf",
-    "extracted_company_username": "github-org",
-    "github_members": ["member1", "member2"],
-    "status": "completed",
-    "timestamp": "2024-02-28T12:00:00"
+    "worker_running": true,
+    "queue_size": 3,
+    "job_statistics": {
+        "queued": 2,
+        "processing": 1,
+        "completed": 15,
+        "failed": 1
+    },
+    "total_jobs": 19
 }
 ```
 
 ## Project Structure
 
 ```
-├── main.py              # Main FastAPI application
+├── main.py              # FastAPI application with async endpoints
+├── task_queue.py        # Async task queue system and worker
 ├── pdf_processor.py     # PDF processing logic
 ├── requirements.txt     # Dependencies
 ├── README.md           # This file
@@ -79,25 +131,56 @@ Get the results of a processing job.
 └── uploads/            # Temporary file storage (auto-created)
 ```
 
-## How it works
+## Technical Implementation
 
-1. **PDF Upload**: Upload a PDF via the `/api/documents/upload` endpoint
-2. **Text Extraction**: Extract text from PDF using pdfplumber
-3. **Organization Detection**: Use regex patterns to find GitHub organization mentions
-4. **Member Fetching**: Call GitHub API to get public organization members
-5. **Storage**: Save results in SQLite database
-6. **Response**: Return job ID and results
+### Queue System
+- **AsyncIO Queue**: Built-in Python asyncio.Queue for task management
+- **Background Worker**: Dedicated async worker processes tasks continuously
+- **Automatic Cleanup**: Files are deleted after processing
+- **Error Recovery**: Failed jobs are marked appropriately
+
+### Processing Flow
+1. **Upload**: File saved, job created with "queued" status
+2. **Queue**: Task added to asyncio queue
+3. **Processing**: Worker picks up task, updates status to "processing"
+4. **Simulation**: 30-300 second delay simulates long processing
+5. **Completion**: Results saved, status updated to "completed"/"failed"
+6. **Cleanup**: Temporary files removed
+
+### Simulated Processing Time
+- **Random Delay**: Each job takes 30-300 seconds to complete
+- **Real Processing**: Actual PDF text extraction and GitHub API calls
+- **Status Updates**: Real-time status changes during processing
 
 ## Testing
 
-1. Create a test PDF with text mentioning a GitHub organization (e.g., "Check out github.com/openai")
-2. Upload via the API docs at http://localhost:8000/docs
-3. Check the results using the job ID
+1. **Upload Multiple PDFs**: Test concurrent processing
+   ```bash
+   curl -X POST "http://localhost:8000/api/documents/upload" \
+        -H "Content-Type: multipart/form-data" \
+        -F "file=@test_document.pdf"
+   ```
+
+2. **Check Status**: Monitor job progress
+   ```bash
+   curl "http://localhost:8000/api/jobs/{job_id}"
+   ```
+
+3. **Queue Status**: Monitor system health
+   ```bash
+   curl "http://localhost:8000/api/queue/status"
+   ```
+
+## Performance Characteristics
+
+- **Non-blocking Uploads**: Immediate response regardless of queue size
+- **Concurrent Processing**: Single background worker processes tasks sequentially
+- **Memory Efficient**: Files processed one at a time
+- **Scalable Design**: Easy to extend with multiple workers or distributed queues
 
 ## Error Handling
 
-The API handles:
-- Invalid PDF files
-- GitHub API errors (404, rate limits)
-- File processing errors
-- Database connection issues 
+- **Upload Failures**: Immediate HTTP error responses
+- **Processing Failures**: Jobs marked as "failed" with cleanup
+- **Worker Recovery**: Continues processing despite individual task failures
+- **Resource Management**: Automatic file cleanup in all scenarios 

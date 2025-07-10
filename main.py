@@ -8,15 +8,18 @@ from fastapi.middleware.cors import CORSMiddleware
 import sqlite3
 from datetime import datetime
 
+# Import task queue system
+from task_queue import add_task_to_queue, start_worker, stop_worker
+
 # Simple configuration
 DATABASE_FILE = "jobs.db"
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(
-    title="PDF Processing API",
-    description="Simple PDF processing with GitHub integration",
-    version="1.0.0"
+    title="PDF Processing API - Async Queue",
+    description="Async PDF processing with queue system and GitHub integration",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -46,16 +49,28 @@ def init_db():
 @app.on_event("startup")
 async def startup_event():
     init_db()
+    await start_worker()  # Start the background worker
+    print("Application started with background task worker")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await stop_worker()  # Stop the background worker
+    print("Background task worker stopped")
 
 @app.get("/")
 async def root():
-    return {"message": "PDF Processing API", "docs": "/docs"}
-
-# Import processing functions
-from pdf_processor import process_pdf_file
+    return {
+        "message": "PDF Processing API - Async Queue", 
+        "docs": "/docs",
+        "queue_info": "Tasks are processed asynchronously in background"
+    }
 
 @app.post("/api/documents/upload")
 async def upload_document(file: UploadFile = File(...)):
+    """
+    Upload PDF for async processing.
+    Returns immediately with job_id while processing happens in background.
+    """
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
@@ -72,47 +87,32 @@ async def upload_document(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
-    # Insert initial job record
+    # Insert initial job record with "queued" status
     conn = sqlite3.connect(DATABASE_FILE)
     conn.execute(
         "INSERT INTO jobs (job_id, original_filename, status, timestamp) VALUES (?, ?, ?, ?)",
-        (job_id, file.filename, "processing", timestamp)
+        (job_id, file.filename, "queued", timestamp)
     )
     conn.commit()
     conn.close()
 
-    # Process PDF
-    try:
-        org_username, members = process_pdf_file(str(file_path))
-        
-        # Update job record
-        conn = sqlite3.connect(DATABASE_FILE)
-        conn.execute(
-            """UPDATE jobs 
-               SET extracted_company_username = ?, github_members = ?, status = ? 
-               WHERE job_id = ?""",
-            (org_username, json.dumps(members) if members else None, "completed", job_id)
-        )
-        conn.commit()
-        conn.close()
-        
-    except Exception as e:
-        # Update job as failed
-        conn = sqlite3.connect(DATABASE_FILE)
-        conn.execute("UPDATE jobs SET status = ? WHERE job_id = ?", ("failed", job_id))
-        conn.commit()
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
-    
-    finally:
-        # Clean up file
-        if file_path.exists():
-            file_path.unlink()
+    # Add task to queue for background processing
+    await add_task_to_queue(job_id, str(file_path), file.filename)
 
-    return {"job_id": job_id, "status": "completed"}
+    # Return immediately with job ID
+    return {
+        "job_id": job_id, 
+        "status": "queued",
+        "message": "PDF uploaded successfully. Processing will begin shortly.",
+        "estimated_processing_time": "30-300 seconds"
+    }
 
 @app.get("/api/jobs/{job_id}")
 async def get_job_status(job_id: str):
+    """
+    Get job status and results.
+    Status can be: 'queued', 'processing', 'completed', 'failed'
+    """
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,))
     row = cursor.fetchone()
@@ -121,11 +121,45 @@ async def get_job_status(job_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    return {
+    job_data = {
         "job_id": row[0],
         "original_filename": row[1],
         "extracted_company_username": row[2],
         "github_members": json.loads(row[3]) if row[3] else None,
         "status": row[4],
         "timestamp": row[5]
+    }
+    
+    # Add helpful messages based on status
+    if job_data["status"] == "queued":
+        job_data["message"] = "Job is waiting in queue to be processed"
+    elif job_data["status"] == "processing":
+        job_data["message"] = "Job is currently being processed (this may take 30-300 seconds)"
+    elif job_data["status"] == "completed":
+        job_data["message"] = "Job completed successfully"
+    elif job_data["status"] == "failed":
+        job_data["message"] = "Job processing failed"
+    
+    return job_data
+
+@app.get("/api/queue/status")
+async def get_queue_status():
+    """Get current queue status and statistics."""
+    from task_queue import task_queue, worker_running
+    
+    # Count jobs by status
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.execute("""
+        SELECT status, COUNT(*) as count 
+        FROM jobs 
+        GROUP BY status
+    """)
+    status_counts = dict(cursor.fetchall())
+    conn.close()
+    
+    return {
+        "worker_running": worker_running,
+        "queue_size": task_queue.qsize(),
+        "job_statistics": status_counts,
+        "total_jobs": sum(status_counts.values())
     } 
