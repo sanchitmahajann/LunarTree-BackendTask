@@ -1,0 +1,10 @@
+Tech Company Overview
+
+OpenAI is revolutionizing artificial intelligence technology. You can find their open-source contributions on their GitHub organization at github.com/openai.
+
+Their public repositories showcase various projects including:
+- GPT models
+- Gym reinforcement learning framework
+- Spinning Up in Deep RL
+
+The organization maintains active collaboration with the developer community through their public repositories. 
