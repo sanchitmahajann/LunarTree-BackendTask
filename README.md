@@ -1,14 +1,14 @@
-# PDF Processing API with LLM & GitHub Integration
+# PDF Processing API - Simplified
 
-A FastAPI-based service that processes PDF documents, extracts GitHub organization information using LLM, and fetches organization member data.
+A simple FastAPI-based service that processes PDF documents and extracts GitHub organization information.
 
 ## Features
 
 - PDF document upload and processing
-- LLM-based GitHub organization extraction
+- Regex-based GitHub organization extraction
 - GitHub API integration for member data
 - SQLite persistence
-- Async processing with job status tracking
+- Simple, clean architecture
 
 ## Setup
 
@@ -22,22 +22,17 @@ A FastAPI-based service that processes PDF documents, extracts GitHub organizati
    ```bash
    pip install -r requirements.txt
    ```
-4. Create a `.env` file with the following variables:
-   ```
-   HUGGINGFACE_API_KEY=your_key_here
-   GITHUB_TOKEN=your_github_token  # Optional for higher rate limits
-   ```
 
 ## Running the API
 
 Development:
 ```bash
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
 Production:
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 ## API Endpoints
@@ -54,42 +49,55 @@ Upload a PDF document for processing.
 ```json
 {
     "job_id": "unique-job-id",
-    "status": "processing"
+    "status": "completed"
 }
 ```
 
 ### GET /api/jobs/{job_id}
-Get the status and results of a processing job.
+Get the results of a processing job.
 
 **Response:**
 ```json
 {
     "job_id": "unique-job-id",
-    "status": "completed",
     "original_filename": "document.pdf",
     "extracted_company_username": "github-org",
     "github_members": ["member1", "member2"],
-    "timestamp": "2024-02-28T12:00:00Z"
+    "status": "completed",
+    "timestamp": "2024-02-28T12:00:00"
 }
 ```
 
+## Project Structure
+
+```
+├── main.py              # Main FastAPI application
+├── pdf_processor.py     # PDF processing logic
+├── requirements.txt     # Dependencies
+├── README.md           # This file
+├── test_document.txt   # Sample test file
+└── uploads/            # Temporary file storage (auto-created)
+```
+
+## How it works
+
+1. **PDF Upload**: Upload a PDF via the `/api/documents/upload` endpoint
+2. **Text Extraction**: Extract text from PDF using pdfplumber
+3. **Organization Detection**: Use regex patterns to find GitHub organization mentions
+4. **Member Fetching**: Call GitHub API to get public organization members
+5. **Storage**: Save results in SQLite database
+6. **Response**: Return job ID and results
+
+## Testing
+
+1. Create a test PDF with text mentioning a GitHub organization (e.g., "Check out github.com/openai")
+2. Upload via the API docs at http://localhost:8000/docs
+3. Check the results using the job ID
+
 ## Error Handling
 
-The API implements proper error handling for:
+The API handles:
 - Invalid PDF files
-- LLM API rate limits and failures
-- GitHub API errors
-- Database connection issues
-
-## Database Schema
-
-```sql
-CREATE TABLE jobs (
-    job_id TEXT PRIMARY KEY,
-    original_filename TEXT NOT NULL,
-    extracted_company_username TEXT,
-    github_members TEXT,
-    status TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-``` 
+- GitHub API errors (404, rate limits)
+- File processing errors
+- Database connection issues 
