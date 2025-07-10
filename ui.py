@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import time
 import json
+import os
 from datetime import datetime
 import pandas as pd
 
@@ -12,41 +13,58 @@ st.set_page_config(
     layout="wide"
 )
 
-# API Configuration
-API_BASE_URL = "http://localhost:8000"
+# API Configuration - Force production URL for Streamlit Cloud
+API_BASE_URL = "https://lunartree-backendtask.onrender.com"
+
+# Debug: Show API URL at startup
+print(f"DEBUG: Using API_BASE_URL = {API_BASE_URL}")
 
 def upload_pdf(file):
     """Upload PDF to the API and return job ID."""
     files = {"file": ("document.pdf", file, "application/pdf")}
+    url = f"{API_BASE_URL}/api/documents/upload"
+    
+    # Debug: Show URL being used
+    st.write(f"🔍 DEBUG: Uploading to {url}")
     
     try:
-        response = requests.post(f"{API_BASE_URL}/api/documents/upload", files=files)
+        response = requests.post(url, files=files)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         st.error(f"Upload failed: {str(e)}")
+        st.error(f"Attempted URL: {url}")
         return None
 
 def get_job_status(job_id):
     """Get job status from the API."""
+    url = f"{API_BASE_URL}/api/jobs/{job_id}"
+    
     try:
-        response = requests.get(f"{API_BASE_URL}/api/jobs/{job_id}")
+        response = requests.get(url)
         if response.status_code == 404:
             return None
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         st.error(f"Failed to get job status: {str(e)}")
+        st.error(f"Attempted URL: {url}")
         return None
 
 def get_queue_status():
     """Get queue status from the API."""
+    url = f"{API_BASE_URL}/api/queue/status"
+    
+    # Debug: Show URL being used
+    st.write(f"🔍 DEBUG: Getting queue status from {url}")
+    
     try:
-        response = requests.get(f"{API_BASE_URL}/api/queue/status")
+        response = requests.get(url)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         st.error(f"Failed to get queue status: {str(e)}")
+        st.error(f"Attempted URL: {url}")
         return None
 
 def format_timestamp(timestamp_str):
@@ -113,9 +131,14 @@ def main():
     st.title("📄 PDF GitHub Organization Extractor")
     st.markdown("Upload PDF documents to extract GitHub organization information using AI")
     
+    # Show API connection status with debug info
+    st.warning(f"🔍 DEBUG MODE: API URL = {API_BASE_URL}")
+    st.info(f"🔗 Connected to API: {API_BASE_URL}")
+    
     # Sidebar for queue status
     with st.sidebar:
         st.header("🔧 System Status")
+        st.write(f"**API Endpoint:** {API_BASE_URL}")
         
         if st.button("🔄 Refresh Status"):
             st.rerun()
@@ -226,10 +249,10 @@ def main():
     # Footer
     st.markdown("---")
     st.markdown(
-        """
+        f"""
         <div style='text-align: center; color: gray;'>
             <p>PDF GitHub Organization Extractor | Built with FastAPI & Streamlit</p>
-            <p>API Documentation: <a href='http://localhost:8000/docs' target='_blank'>http://localhost:8000/docs</a></p>
+            <p>API Documentation: <a href='{API_BASE_URL}/docs' target='_blank'>{API_BASE_URL}/docs</a></p>
         </div>
         """, 
         unsafe_allow_html=True
@@ -238,12 +261,18 @@ def main():
 if __name__ == "__main__":
     # Check if API is accessible
     try:
-        response = requests.get(f"{API_BASE_URL}/")
+        test_url = f"{API_BASE_URL}/"
+        st.write(f"🔍 DEBUG: Testing connection to {test_url}")
+        
+        response = requests.get(test_url)
         if response.status_code != 200:
             st.error(f"⚠️ Cannot connect to API at {API_BASE_URL}")
-            st.info("Please make sure the FastAPI server is running: `uvicorn main:app --reload`")
-    except requests.exceptions.RequestException:
+            st.info("Please check if the FastAPI server is running")
+        else:
+            st.success(f"✅ API connection successful: {API_BASE_URL}")
+    except requests.exceptions.RequestException as e:
         st.error(f"⚠️ Cannot connect to API at {API_BASE_URL}")
-        st.info("Please make sure the FastAPI server is running: `uvicorn main:app --reload`")
+        st.error(f"Error: {str(e)}")
+        st.info("Please check if the FastAPI server is running")
     
     main() 
